@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brick Breaker Extreme</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tone.js for generating synthesized sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script> 
+    <style>
+        /* General Styles */
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            padding: 20px;
+        }
+
+        /* Game Container */
+        .game-container {
+            background-color: #0d1a38;
+            border: 8px solid #3d72a5;
+            border-radius: 15px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.8), inset 0 0 10px rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Canvas Styles */
+        #gameCanvas {
+            background-color: #000;
+            display: block;
+            border: 2px solid #5a99d5;
+            border-radius: 5px;
+            touch-action: none; /* Prevents default mobile touch behavior */
+        }
+
+        /* --- Footer and Control Bar Styles for Usability --- */
+        .game-footer {
+            width: 100%;
+            max-width: 480px; /* Match canvas width */
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column; /* Default: stack HUD and controls vertically on mobile */
+            gap: 15px;
+            align-items: center;
+        }
+
+        .hud {
+            width: 100%;
+            display: flex;
+            justify-content: space-around; /* Distribute items evenly */
+            align-items: center;
+            padding: 5px 0;
+            font-size: 1.1em;
+            text-shadow: 1px 1px 3px #000;
+        }
+
+        .status-item {
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 5px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px; /* Spacing between buttons */
+            width: 100%;
+            padding: 0 5px;
+        }
+
+        .action-button {
+            padding: 12px 18px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #fff;
+            background: linear-gradient(180deg, #4CAF50, #388E3C);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #1B5E20, 0 8px 15px rgba(0, 0, 0, 0.5);
+            transition: all 0.1s ease;
+            text-transform: uppercase;
+            flex-grow: 1; /* Make buttons expand to fill space */
+            max-width: 200px;
+        }
+
+        .action-button:disabled {
+            background: linear-gradient(180deg, #6c757d, #5a6268);
+            box-shadow: 0 4px 0 #343a40, 0 8px 15px rgba(0, 0, 0, 0.5);
+            cursor: not-allowed;
+        }
+
+        .action-button:hover:not(:disabled) {
+            background: linear-gradient(180deg, #66BB6A, #4CAF50);
+        }
+
+        .action-button:active:not(:disabled) {
+            box-shadow: 0 1px 0 #1B5E20;
+            transform: translateY(3px);
+        }
+
+        /* Desktop/Larger Screen Layout */
+        @media (min-width: 480px) {
+            .game-footer {
+                flex-direction: row; /* Place HUD on left, Controls on right */
+                justify-content: space-between;
+                align-items: center;
+            }
+            .hud {
+                width: auto;
+                justify-content: flex-start;
+                gap: 15px;
+            }
+            .controls {
+                width: auto;
+            }
+        }
+
+        /* Modal Message Box (used instead of alert) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1c2b53, #111a33);
+            border: 5px solid #ffcc00;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(255, 204, 0, 0.5);
+            max-width: 90%;
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+            color: #ffcc00;
+            font-size: 2em;
+        }
+
+        .modal-content p {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1>BRICK BREAKER EXTREME</h1>
+
+        <canvas id="gameCanvas" width="480" height="320"></canvas>
+
+        <!-- Refactored Control Bar -->
+        <div class="game-footer">
+            <div class="hud">
+                <span class="status-item">Score: <span id="scoreDisplay">0</span></span>
+                <span class="status-item">Lives: <span id="livesDisplay">3</span></span>
+            </div>
+            <div class="controls">
+                <button id="startButton" class="action-button" onclick="startGame()">Start Game</button>
+                <button id="pauseButton" class="action-button" onclick="togglePause()" disabled>Pause Game</button>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Modal Message Box -->
+    <div id="messageModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="modalTitle">Welcome!</h2>
+            <p id="modalMessage">Click Start Game to begin! Move the paddle with the mouse or the left/right arrow keys.</p>
+            <button class="action-button" onclick="hideModal()">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // Use an Immediately Invoked Function Expression (IIFE) to prevent variable redeclaration errors
+        (function() {
+            // --- Firebase Globals (Required for environment) ---
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+            
+            // Game State and Canvas Setup
+            const canvas = document.getElementById("gameCanvas");
+            const ctx = canvas.getContext("2d");
+
+            // Game Constants
+            const BALL_RADIUS = 5;
+            const PADDLE_WIDTH = 75;
+            const PADDLE_HEIGHT = 10;
+            const BRICK_ROW_COUNT = 5;
+            const BRICK_COLUMN_COUNT = 8;
+            const BRICK_WIDTH = 48;
+            const BRICK_HEIGHT = 15;
+            const BRICK_PADDING = 5;
+            const BRICK_OFFSET_TOP = 30;
+            const BRICK_OFFSET_LEFT = 20;
+
+            // Dynamic Game Variables
+            let x; // Ball x-position
+            let y; // Ball y-position
+            let dx; // Ball x-speed
+            let dy; // Ball y-speed
+            let paddleX; // Paddle x-position
+            let score = 0;
+            let lives = 3;
+            let gameRunning = false;
+            let paused = false; // NEW: Pause state
+            let gameLoopId;
+
+            // Brick Structure
+            let bricks = [];
+            let totalBricks;
+
+            // HTML Elements
+            const scoreDisplay = document.getElementById('scoreDisplay');
+            const livesDisplay = document.getElementById('livesDisplay');
+            const startButton = document.getElementById('startButton');
+            const pauseButton = document.getElementById('pauseButton'); 
+
+            // Modal Elements
+            const messageModal = document.getElementById('messageModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalMessage = document.getElementById('modalMessage');
+            
+            // --- Tone.js Audio Setup (UPDATED FOR RICHER SOUND) ---
+            let polySynth;    // For bricks (Triangle-wave chime)
+            let paddleSynth;  // For walls and paddle (DuoSynth boing)
+            let endSynth;     // For game over/win (MembraneSynth boom)
+            let reverb;       // Global reverb for space
+            let delay;        // Global delay for dimension
+            let isAudioInitialized = false;
+
+            /**
+             * Initializes Tone.js instruments and effects.
+             */
+            function initializeAudio() {
+                if (isAudioInitialized) return;
+                
+                // 1. Initialize Effects (Reverb and Delay)
+                reverb = new Tone.Reverb({ decay: 2, predelay: 0.01, wet: 0.3 }).toDestination();
+                delay = new Tone.PingPongDelay({ delayTime: "8n", feedback: 0.3, wet: 0.1 }).connect(reverb);
+                
+                // 2. PolySynth for Bricks (Crystal/Chime sound)
+                polySynth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "triangle" }, // Use triangle for softer, chime-like sound
+                    envelope: { attack: 0.001, decay: 0.2, sustain: 0.0, release: 0.5 },
+                    volume: -10 
+                }).connect(delay).connect(reverb); // Route through effects
+                
+                // 3. DuoSynth for Paddle/Wall (Elastic/Boing sound)
+                paddleSynth = new Tone.DuoSynth({
+                    vibratoAmount: 0.5,
+                    vibratoRate: 5,
+                    harmonicity: 1.5,
+                    voice0: {
+                        volume: -10,
+                        oscillator: { type: "sawtooth" },
+                        envelope: { attack: 0.01, decay: 0.05, sustain: 0.1, release: 0.5 }
+                    },
+                    voice1: {
+                        volume: -10,
+                        oscillator: { type: "sine" },
+                        envelope: { attack: 0.01, decay: 0.05, sustain: 0.1, release: 0.5 }
+                    }
+                }).connect(reverb); // Route through reverb
+                
+                // 4. MembraneSynth for game end (Low cinematic boom)
+                endSynth = new Tone.MembraneSynth({
+                    pitchDecay: 0.02,
+                    octaves: 5,
+                    envelope: { attack: 0.01, decay: 0.8, sustain: 0.01, release: 1.5 },
+                    volume: -6
+                }).toDestination();
+
+                Tone.start();
+                isAudioInitialized = true;
+            }
+            
+            /** Plays a unique, crystalline tone for each row of bricks. */
+            function playBrickHit(row) {
+                if (!isAudioInitialized) return;
+                // Notes ascending by row, now using the polySynth with effects
+                const notes = ["C5", "D5", "E5", "F5", "G5"]; 
+                polySynth.triggerAttackRelease(notes[row], "16n");
+            }
+
+            /** Plays a resonant, detuned tone for paddle or wall collision. */
+            function playPaddleHit() {
+                if (!isAudioInitialized) return;
+                // FIX: DuoSynth expects a single note, not an array. We rely on the DuoSynth's internal
+                // harmonicity setting to create a rich, detuned sound from the single note C3.
+                paddleSynth.triggerAttackRelease("C3", "16n");
+            }
+
+            /** Plays a special sequence for winning or losing. */
+            function playGameEnd(isWin) {
+                if (!isAudioInitialized) return;
+                if (isWin) {
+                    // Win sound: Major third arpeggio using the polySynth
+                    const now = Tone.now();
+                    polySynth.triggerAttackRelease("E5", "8n", now);
+                    polySynth.triggerAttackRelease("G5", "8n", now + 0.15);
+                    polySynth.triggerAttackRelease("C6", "8n", now + 0.3);
+                } else { 
+                    // Game Over sound: Low, resonant failure boom
+                    endSynth.triggerAttackRelease("C2", "1n"); 
+                }
+            }
+
+
+            // --- Utility Functions ---
+
+            /**
+             * Converts RGB color object to a CSS string.
+             */
+            function rgbToCss(r, g, b) {
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+
+            /**
+             * Show a custom message box instead of using alert.
+             */
+            function showModal(title, message) {
+                modalTitle.textContent = title;
+                modalMessage.textContent = message;
+                messageModal.style.display = 'flex';
+            }
+
+            /**
+             * Hides the entire modal overlay.
+             */
+            function hideModal() {
+                messageModal.style.display = 'none'; 
+            }
+
+            // --- Game Setup Functions ---
+
+            function initBricks() {
+                bricks = [];
+                totalBricks = BRICK_ROW_COUNT * BRICK_COLUMN_COUNT;
+                for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                    bricks[c] = [];
+                    for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                        // status 1 means brick is active
+                        bricks[c][r] = { x: 0, y: 0, status: 1 };
+                    }
+                }
+            }
+
+            function resetBallAndPaddle() {
+                x = canvas.width / 2;
+                y = canvas.height - 30;
+                dx = 2; // Initial horizontal speed
+                dy = -2; // Initial vertical speed (moving up)
+                paddleX = (canvas.width - PADDLE_WIDTH) / 2;
+            }
+
+            /**
+             * Toggles the game pause state.
+             */
+            function togglePause() {
+                if (!gameRunning) return;
+
+                paused = !paused;
+
+                if (paused) {
+                    pauseButton.textContent = "Resume Game";
+                    showModal("PAUSED", "The game is currently paused. Click 'Resume Game' or close this window to continue.");
+                    // We rely on the drawGame loop to stop itself by not requesting the next frame
+                } else {
+                    pauseButton.textContent = "Pause Game";
+                    hideModal();
+                    // Restart the loop only if it was stopped. Requesting the frame starts the update cycle again.
+                    if (gameLoopId === undefined) {
+                        gameLoopId = requestAnimationFrame(drawGame); 
+                    }
+                }
+            }
+
+
+            function startGame() {
+                // Stop any running game loop first
+                if (gameLoopId !== undefined) {
+                    cancelAnimationFrame(gameLoopId);
+                    gameLoopId = undefined;
+                }
+                
+                // Initialize audio context
+                initializeAudio();
+                
+                // Close modal if open
+                hideModal();
+
+                score = 0;
+                lives = 3;
+                gameRunning = true;
+                paused = false; // Ensure game is not paused
+                startButton.textContent = "Restart Game";
+                pauseButton.textContent = "Pause Game";
+                pauseButton.disabled = false; // Enable pause button
+
+                updateHUD();
+
+                initBricks();
+                resetBallAndPaddle();
+
+                gameLoopId = requestAnimationFrame(drawGame);
+            }
+
+            // --- Drawing Functions ---
+
+            function drawBall() {
+                ctx.beginPath();
+                ctx.arc(x, y, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = "#FFC300"; // Vibrant yellow
+                ctx.shadowColor = "#FFC300";
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.closePath();
+                ctx.shadowBlur = 0; // Reset shadow for other elements
+            }
+
+            function drawPaddle() {
+                ctx.beginPath();
+                ctx.rect(paddleX, canvas.height - PADDLE_HEIGHT, PADDLE_WIDTH, PADDLE_HEIGHT);
+                
+                // Paddle gradient
+                const gradient = ctx.createLinearGradient(paddleX, 0, paddleX + PADDLE_WIDTH, 0);
+                gradient.addColorStop(0, "#30a7e0"); // Dark blue
+                gradient.addColorStop(0.5, "#80d0ff"); // Light blue center
+                gradient.addColorStop(1, "#30a7e0"); // Dark blue
+                
+                ctx.fillStyle = gradient;
+                ctx.shadowColor = "#80d0ff";
+                ctx.shadowBlur = 10;
+                ctx.fill();
+                ctx.closePath();
+                ctx.shadowBlur = 0; // Reset shadow
+            }
+
+            function getBrickColor(r) {
+                // Assign different colors based on row for a gradient effect
+                const colors = [
+                    { r: 255, g: 99, b: 71 },   // Tomato
+                    { r: 255, g: 165, b: 0 },   // Orange
+                    { r: 255, g: 255, b: 0 },   // Yellow
+                    { r: 60, g: 179, b: 113 },  // Medium Sea Green
+                    { r: 65, g: 105, b: 225 }   // Royal Blue
+                ];
+                return rgbToCss(colors[r].r, colors[r].g, colors[r].b);
+            }
+
+            function drawBricks() {
+                for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                    for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                        const brick = bricks[c][r];
+                        if (brick.status === 1) {
+                            const brickX = (c * (BRICK_WIDTH + BRICK_PADDING)) + BRICK_OFFSET_LEFT;
+                            const brickY = (r * (BRICK_HEIGHT + BRICK_PADDING)) + BRICK_OFFSET_TOP;
+                            brick.x = brickX;
+                            brick.y = brickY;
+
+                            ctx.beginPath();
+                            ctx.rect(brickX, brickY, BRICK_WIDTH, BRICK_HEIGHT);
+                            ctx.fillStyle = getBrickColor(r);
+                            ctx.shadowColor = ctx.fillStyle;
+                            ctx.shadowBlur = 5;
+                            ctx.fill();
+                            ctx.closePath();
+                            ctx.shadowBlur = 0; // Reset shadow
+                        }
+                    }
+                }
+            }
+
+            function updateHUD() {
+                scoreDisplay.textContent = score;
+                livesDisplay.textContent = lives;
+            }
+
+            // --- Game Logic Functions ---
+
+            function collisionDetection() {
+                for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                    for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                        const brick = bricks[c][r];
+                        if (brick.status === 1) {
+                            // Check if ball is within the brick's boundaries
+                            if (x + BALL_RADIUS > brick.x && x - BALL_RADIUS < brick.x + BRICK_WIDTH &&
+                                y + BALL_RADIUS > brick.y && y - BALL_RADIUS < brick.y + BRICK_HEIGHT) {
+                                
+                                dy = -dy; // Reverse vertical direction
+                                brick.status = 0; // Destroy the brick
+                                score += 10;
+                                updateHUD();
+                                
+                                playBrickHit(r); // Play sound on brick hit
+
+                                // Win Condition Check
+                                if (score === totalBricks * 10) {
+                                    gameRunning = false;
+                                    pauseButton.disabled = true;
+                                    cancelAnimationFrame(gameLoopId);
+                                    gameLoopId = undefined;
+                                    playGameEnd(true); // Play win sound
+                                    showModal("VICTORY!", `Congratulations! You cleared all the bricks and scored ${score} points!`);
+                                    startButton.textContent = "Play Again";
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            function checkWallAndPaddleCollision() {
+                // Wall Collision (Left/Right)
+                if (x + dx > canvas.width - BALL_RADIUS || x + dx < BALL_RADIUS) {
+                    dx = -dx;
+                    playPaddleHit(); // Play sound on wall hit
+                }
+
+                // Wall Collision (Top)
+                if (y + dy < BALL_RADIUS) {
+                    dy = -dy;
+                    playPaddleHit(); // Play sound on wall hit
+                }
+                
+                // Wall Collision (Bottom - Game Over check)
+                else if (y + dy > canvas.height - BALL_RADIUS) {
+                    // Check Paddle Collision
+                    if (x > paddleX && x < paddleX + PADDLE_WIDTH) {
+                        // Ball hit the paddle! Reverse direction and apply spin based on hit location
+                        dy = -dy;
+                        
+                        // Simple spin: makes the ball go faster/slower horizontally if hit on the edges
+                        const relativeIntersectX = (x - (paddleX + PADDLE_WIDTH/2));
+                        const normalizedIntersectX = relativeIntersectX / (PADDLE_WIDTH/2);
+                        dx = normalizedIntersectX * 3; // Max horizontal change is 3
+                        
+                        playPaddleHit(); // Play sound on paddle hit
+                    } else {
+                        // Ball missed the paddle
+                        lives--;
+                        updateHUD();
+
+                        if (lives === 0) {
+                            // Game Over
+                            gameRunning = false;
+                            pauseButton.disabled = true;
+                            cancelAnimationFrame(gameLoopId);
+                            gameLoopId = undefined;
+                            playGameEnd(false); // Play lose sound
+                            showModal("GAME OVER", `You ran out of lives! Final Score: ${score}`);
+                            startButton.textContent = "Play Again";
+                        } else {
+                            // Reset ball and paddle position for next life
+                            resetBallAndPaddle();
+                        }
+                    }
+                }
+            }
+
+            // --- Input Handlers ---
+
+            function mouseMoveHandler(e) {
+                if (!gameRunning || paused) return;
+                // Calculate mouse position relative to the canvas
+                const relativeX = e.clientX - canvas.getBoundingClientRect().left;
+                
+                if (relativeX > 0 && relativeX < canvas.width) {
+                    // Ensure paddle stays within bounds
+                    paddleX = Math.min(Math.max(0, relativeX - PADDLE_WIDTH / 2), canvas.width - PADDLE_WIDTH);
+                }
+            }
+            
+            function touchMoveHandler(e) {
+                if (!gameRunning || paused) return;
+                // Prevent scrolling on touch
+                e.preventDefault(); 
+                // Get the X coordinate of the first touch point
+                const touch = e.touches[0];
+                const relativeX = touch.clientX - canvas.getBoundingClientRect().left;
+                
+                if (relativeX > 0 && relativeX < canvas.width) {
+                    // Ensure paddle stays within bounds
+                    paddleX = Math.min(Math.max(0, relativeX - PADDLE_WIDTH / 2), canvas.width - PADDLE_WIDTH);
+                }
+            }
+
+            function keyDownHandler(e) {
+                if (!gameRunning || paused) return;
+                const paddleSpeed = 7;
+                if (e.key === "Right" || e.key === "ArrowRight") {
+                    paddleX = Math.min(paddleX + paddleSpeed, canvas.width - PADDLE_WIDTH);
+                } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                    paddleX = Math.max(paddleX - paddleSpeed, 0);
+                }
+            }
+            
+            // --- Main Game Loop ---
+
+            function drawGame() {
+                // Clear the canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (gameRunning) {
+                    // Draw elements regardless of pause state for visual continuity
+                    drawBricks();
+                    drawBall();
+                    drawPaddle();
+
+                    if (!paused) {
+                        // 2. Check for collisions
+                        collisionDetection();
+                        checkWallAndPaddleCollision();
+                        
+                        // 3. Update ball position
+                        x += dx;
+                        y += dy;
+                        
+                        // 4. Continue loop
+                        gameLoopId = requestAnimationFrame(drawGame);
+                    } else {
+                        // If paused, do not request next frame. The loop will resume when togglePause() calls requestAnimationFrame.
+                        gameLoopId = undefined;
+                    }
+                }
+            }
+
+            // --- Initialization and Event Listeners ---
+            
+            // Start by displaying the welcome modal
+            window.onload = function() {
+                showModal("Brick Breaker Extreme", "Use your mouse, touch, or arrow keys to control the paddle. Click 'Start Game' to begin!");
+            };
+
+            // Attach listeners for control
+            document.addEventListener("mousemove", mouseMoveHandler, false);
+            document.addEventListener("keydown", keyDownHandler, false);
+            
+            // Touch events for mobile compatibility
+            canvas.addEventListener("touchmove", touchMoveHandler, false);
+            canvas.addEventListener("touchstart", touchMoveHandler, false);
+
+            // Make the functions callable from the global scope (HTML onclick attributes)
+            window.startGame = startGame;
+            window.hideModal = hideModal;
+            window.togglePause = togglePause; // Expose the new function
+
+            // Initial setup on load (without starting the loop)
+            initBricks();
+            resetBallAndPaddle();
+            updateHUD();
+
+        })(); // End of IIFE
+
+    </script>
+</body>
+</html>
